@@ -31,7 +31,7 @@
 
 static inline double approxfunct(double a, double b, double c, double x)
 {
-	debug(5, "a == %lf, b == %lf, c == %.10lf, x == %lf", a, b, c, x);
+	debug(5, "a == %lf, b == %lf, c == %.10lf, x == %lf  -->  %lf", a, b, c, x, a*x*x + b*x + c);
 	return a*x*x + b*x + c;
 }
 
@@ -111,7 +111,7 @@ predanswer_t *predictor(size_t n, double *array)
 	critical_on (end <= 0);
 	size_t start  = MAX(0, (long)end - PREDICTOR_APPROXIMATE_LEN);
 
-	critical_on ((start+end) % 2);
+	critical_on (((start+end) % 2));
 
 	size_t center = (start+end) / 2;
 
@@ -151,8 +151,9 @@ predanswer_t *predictor(size_t n, double *array)
 
 			// And at last calculating the goddamn coefficients (except c[2])
 			getcoeffs(c, sum, k);
-			debug(3, "getting k[2]");
-			// Calculating k[2]
+			
+			debug(3, "getting c[2]");
+			// Calculating c[2]
 			{
 				double tempsum[M] = {0};
 				double tempc[M];
@@ -186,11 +187,32 @@ predanswer_t *predictor(size_t n, double *array)
 
 				getsums(tempsum, start, center, end, temparray);
 
-				k[2]  = 1 / (double)path_avg / (double)path_avg / (double)path_avg / (double)path_avg / 2;
+				k[2]  = 1 / (double)path_avg / (double)path_avg / (double)path_avg / (double)path_avg / (double)path_avg / 2;
 				getcoeffs(tempc, tempsum, k);
 				c[2]  = tempc[2];
-				c[0] -= shift;
+//				c[0] -= shift;
 //				c[0] += c[1]*path_avg;
+			}
+
+			// Normalizing c[0]
+			{
+				size_t i;
+				double tempc1[M];//,   tempc2[M];
+				double tempsum1[M];//, tempsum2[M];
+				i = start;
+				while (i <= end) {
+					temparray[i] = approxfunct(c[2], c[1], c[0], (double)i-center);
+					i++;
+				}
+				getsums(tempsum1, start, center, end, temparray);
+				getcoeffs(tempc1, tempsum1, k);
+//				getsums(tempsum2, start, center, end, array);
+//				getcoeffs(tempc2, tempsum2, k);
+
+				double cdiff = c[0] - tempc1[0];
+				debug(3, "cdiff == %lf", cdiff);
+
+				c[0] += cdiff;
 			}
 		}
 	}

@@ -28,6 +28,12 @@
 #include "error.h"
 #include "predictor.h"
 
+static inline void getresult(double *array, size_t array_len, size_t length) {
+	predanswer_t *answer = predictor(length, &array[array_len - length]);
+	critical_on (answer == NULL);
+	printf("Result %4i: %lf (approximated_currency: %lf)\n", length, answer->to_buy, answer->approximated_currency);
+}
+
 int main() {
 	double array[PARSER_MAXELEMENTS];
 	size_t array_len = 0;
@@ -72,10 +78,10 @@ int main() {
 		}
 	}
 
-	predanswer_t *answer = predictor(array_len, array);
-	critical_on (answer == NULL);
-
-	printf("Result: %lf (approximated_currency: %lf)\n", answer->to_buy, answer->approximated_currency);
+	getresult(array, array_len, 15);
+	getresult(array, array_len, 75);
+	getresult(array, array_len, 365);
+	getresult(array, array_len, 901);
 
 	return 0;
 }

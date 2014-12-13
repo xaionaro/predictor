@@ -228,7 +228,8 @@ predanswer_t *predictor(size_t n, double *array)
 		}
 	}
 
-	answer.approximated_currency = approxfunct(c[2], c[1], c[0], path_avg);
+	answer.approximated_currency	= approxfunct(c[2], c[1], c[0], path_avg);
+	answer.to_buy			= (answer.approximated_currency - array[end]) / array[end];
 
 	free(temparray);
 	return &answer;

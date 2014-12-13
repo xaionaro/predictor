@@ -31,7 +31,7 @@
 static inline void getresult(double *array, size_t array_len, size_t length) {
 	predanswer_t *answer = predictor(length, &array[array_len - length]);
 	critical_on (answer == NULL);
-	printf("Result %4i: %lf (approximated_currency: %lf)\n", length, answer->to_buy, answer->approximated_currency);
+	printf("Result %4i:\t%3lf\t(approximated_currency: %lf)\n", length, answer->to_buy, answer->approximated_currency);
 }
 
 int main() {
@@ -78,7 +78,11 @@ int main() {
 		}
 	}
 
+	printf("The last cost is %lf\n", array[array_len-1]);
+
+	getresult(array, array_len, 7);
 	getresult(array, array_len, 15);
+	getresult(array, array_len, 31);
 	getresult(array, array_len, 75);
 	getresult(array, array_len, 365);
 	getresult(array, array_len, 901);

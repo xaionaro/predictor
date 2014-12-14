@@ -17,9 +17,13 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define M 3
+
 struct predictor_answer {
 	double	to_buy;
+	double	sqdiff;
 	double	approximated_currency;
+	double	c[M];
 };
 typedef struct predictor_answer predanswer_t;
 

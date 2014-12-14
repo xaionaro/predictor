@@ -24,14 +24,19 @@
 
 #include <stdio.h>	/* getline()	*/
 #include <stdlib.h>	/* atof()	*/
+#include <math.h>
 
 #include "error.h"
 #include "predictor.h"
 
-static inline void getresult(double *array, size_t array_len, size_t length) {
+static inline double getresult(double *array, size_t array_len, size_t length) {
+	if (length > array_len)
+		length = array_len;
+
 	predanswer_t *answer = predictor(length, &array[array_len - length]);
 	critical_on (answer == NULL);
-	printf("Result %4i:\t%3lf\t(approximated_currency: %lf)\n", length, answer->to_buy, answer->approximated_currency);
+	fprintf(stderr, "Result %4li:\t%3lf\t(approximated_currency: %lf)\t%lf\n", length, answer->to_buy, answer->approximated_currency, answer->sqdiff);
+	return answer->to_buy;
 }
 
 int main() {
@@ -73,19 +78,40 @@ int main() {
 			line[read_len] = 0;
 
 			value = atof(line);
-			debug(10, "Line: %lf (%li, %s)", value, read_len, line);
+			debug(8, "Line: %lf (%li, %s)", value, read_len, line);
 			array[ array_len++ ] = value;
 		}
 	}
 
-	printf("The last cost is %lf\n", array[array_len-1]);
+	fprintf(stderr, "The last cost is %lf\n", array[array_len-1]);
 
-	getresult(array, array_len, 7);
-	getresult(array, array_len, 15);
-	getresult(array, array_len, 31);
-	getresult(array, array_len, 75);
-	getresult(array, array_len, 365);
-	getresult(array, array_len, 901);
+	double to_buy = 0, to_buy_next, sign;
+	char pass = 1;
+
+	to_buy_next   = getresult(array, array_len, 7)*500;
+	sign = to_buy_next;
+	to_buy += to_buy_next;
+
+	to_buy_next   = getresult(array, array_len, 15)*500;
+	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;
+	to_buy_next   = getresult(array, array_len, 31)*700;
+	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;
+
+	to_buy_next   = getresult(array, array_len, 75)*1000;
+//	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;
+	to_buy_next   = getresult(array, array_len, 365)*1000;
+//	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;/*
+	to_buy_next   = getresult(array, array_len, 901);
+	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;*/
+
+	to_buy *= pass;
+
+	printf("%lf\n", to_buy);
 
 	return 0;
 }

@@ -22,12 +22,17 @@
 
 #include <stdlib.h>	/* size_t	*/
 #include <string.h>	/* memset()	*/
+#include <math.h>	/* fabs()	*/
 
 #include "error.h"
 #include "malloc.h"
 #include "predictor.h"
 
-#define M 3
+static inline double dapproxfunct(double a, double b, double c, double x)
+{
+	debug(5, "a == %lf, b == %lf, c == %.10lf, x == %lf  -->  %lf", a, b, c, x, 2*a*x + b);
+	return 2*a*x + b;
+}
 
 static inline double approxfunct(double a, double b, double c, double x)
 {
@@ -219,17 +224,51 @@ predanswer_t *predictor(size_t n, double *array)
 
 	debug(1, "%lf (%lf [%lf], %lf [%lf]); path_avg == %lf", c[0], c[1], c[0]*(path_avg/2), c[2], c[0]*(path_avg/2)*(path_avg/2), path_avg);
 
-	// Calculating the coefficients
+	// Calculating the backlash
+	double sqdiff_sum = 0;
 	{
 		size_t i;
 		i = start;
 		while (i <= end) {
+			double diff, sqdiff;
+
+			diff   = array[i] - approxfunct(c[2], c[1], c[0], (double)i-center);
+
+			sqdiff = diff*diff;
+			sqdiff_sum += sqdiff;
+
 			i++;
 		}
+
+		sqdiff_sum /= n;
+		sqdiff_sum /= n-1;
 	}
 
-	answer.approximated_currency	= approxfunct(c[2], c[1], c[0], path_avg);
-	answer.to_buy			= (answer.approximated_currency - array[end]) / array[end];
+	answer.approximated_currency	 = approxfunct(c[2], c[1], c[0], path_avg);
+	answer.to_buy			 = answer.approximated_currency - array[end];
+	if (sqdiff_sum > fabs(answer.to_buy))
+		answer.to_buy = 0;
+	answer.to_buy			/= array[end];
+	answer.to_buy			*= fabs(answer.to_buy);
+
+	answer.sqdiff			 = sqdiff_sum;
+
+
+	if ((answer.to_buy * (array[end] - array[end-1])) < 0)
+		answer.to_buy = answer.to_buy / 2.72;
+
+//	answer.to_buy			+= c[1]*10;
+
+/*
+	if (answer.to_buy > 0) {
+		if (answer.to_buy * c[1] > 0)
+			answer.to_buy = 0;
+		if (answer.to_buy * c[2] < 0)
+			answer.to_buy = 0;
+	}
+*/
+
+	memcpy(answer.c, c, sizeof(c));
 
 	free(temparray);
 	return &answer;

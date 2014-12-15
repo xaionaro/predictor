@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
 
 	// For bad compaines (fuse), but it's bad for LJPC, too
 	if (((negativec1 + negativec2) >= 6) && (c1_7 < 0))
-		to_buy -= -c1_7/answer->c[0]/sqdiff_7/sqdiff_7/sqdiff_7/6000;
+		to_buy -= -c1_7/answer->c[0]/sqdiff_7/sqdiff_7/sqdiff_7/answer->sqdiff/9000000;
 
 	to_buy *= pass;
 

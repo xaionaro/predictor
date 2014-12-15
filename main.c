@@ -40,7 +40,7 @@ static inline double getresult(double *array, size_t array_len, size_t length, p
 	return answer->to_buy;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
 	double array[PARSER_MAXELEMENTS];
 	size_t array_len = 0;
 
@@ -86,9 +86,9 @@ int main() {
 
 	fprintf(stderr, "The last cost is %lf\n", array[array_len-1]);
 
-	double to_buy = 0, to_buy_next, sign, c1;
+	double to_buy = 0, to_buy_next, sign, c1, c1_7, sqdiff_7;
 	char pass = 1;
-	int negativec1 = 0;
+	int negativec1 = 0, negativec2 = 0;
 	predanswer_t *answer;
 
 	c1 = -100000;
@@ -96,39 +96,56 @@ int main() {
 	to_buy_next   = getresult(array, array_len, 7,		&answer)*500;
 	sign = to_buy_next;
 	to_buy += to_buy_next;
-	if (c1 < answer->c[1])
+	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
+	c1_7		    = answer->c[1];
+	sqdiff_7	    = answer->sqdiff;
 
 	to_buy_next   = getresult(array, array_len, 15,		&answer)*500;
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
-	if (c1 < answer->c[1])
+	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
 
 	to_buy_next   = getresult(array, array_len, 31,		&answer)*700;
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
-	if (c1 < answer->c[1])
+	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
 
 	to_buy_next   = getresult(array, array_len, 75,		&answer)*1000;
 //	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
-	if (c1 < answer->c[1])
+	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
 
 	to_buy_next   = getresult(array, array_len, 365,	&answer)*1000;
 //	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
-	if (c1 < answer->c[1])
+	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
 /*	to_buy_next   = getresult(array, array_len, 901);
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;*/
 
-	// For VIP
-	if ((negativec1>=5) && (answer->c[2] < 0))
-		to_buy -= 1000/answer->c[0];
+	// For bad compaines (fuse), but it's bad for LJPC, too
+	if (((negativec1 + negativec2) >= 6) && (c1_7 < 0))
+		to_buy -= -c1_7/answer->c[0]/sqdiff_7/sqdiff_7/sqdiff_7/6000;
 
 	to_buy *= pass;
 

@@ -29,13 +29,14 @@
 #include "error.h"
 #include "predictor.h"
 
-static inline double getresult(double *array, size_t array_len, size_t length) {
+static inline double getresult(double *array, size_t array_len, size_t length, predanswer_t **answer_p) {
 	if (length > array_len)
 		length = array_len;
 
 	predanswer_t *answer = predictor(length, &array[array_len - length]);
 	critical_on (answer == NULL);
 	fprintf(stderr, "Result %4li:\t%3lf\t(approximated_currency: %lf)\tsqdiff: %lf\tc[0]: %lf\tc[1]: %lf\tc[2]: %lf\n", length, answer->to_buy, answer->approximated_currency, answer->sqdiff, answer->c[0], answer->c[1], answer->c[2]);
+	*answer_p = answer;
 	return answer->to_buy;
 }
 
@@ -85,29 +86,49 @@ int main() {
 
 	fprintf(stderr, "The last cost is %lf\n", array[array_len-1]);
 
-	double to_buy = 0, to_buy_next, sign;
+	double to_buy = 0, to_buy_next, sign, c1;
 	char pass = 1;
+	int negativec1 = 0;
+	predanswer_t *answer;
 
-	to_buy_next   = getresult(array, array_len, 7)*500;
+	c1 = -100000;
+
+	to_buy_next   = getresult(array, array_len, 7,		&answer)*500;
 	sign = to_buy_next;
 	to_buy += to_buy_next;
+	if (c1 < answer->c[1])
+		negativec1 += (answer->c[1]<0);
 
-	to_buy_next   = getresult(array, array_len, 15)*500;
+	to_buy_next   = getresult(array, array_len, 15,		&answer)*500;
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
-	to_buy_next   = getresult(array, array_len, 31)*700;
+	if (c1 < answer->c[1])
+		negativec1 += (answer->c[1]<0);
+
+	to_buy_next   = getresult(array, array_len, 31,		&answer)*700;
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
+	if (c1 < answer->c[1])
+		negativec1 += (answer->c[1]<0);
 
-	to_buy_next   = getresult(array, array_len, 75)*1000;
+	to_buy_next   = getresult(array, array_len, 75,		&answer)*1000;
 //	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
-	to_buy_next   = getresult(array, array_len, 365)*1000;
+	if (c1 < answer->c[1])
+		negativec1 += (answer->c[1]<0);
+
+	to_buy_next   = getresult(array, array_len, 365,	&answer)*1000;
 //	if (sign*to_buy_next < 0) pass = 0;
-	to_buy += to_buy_next;/*
-	to_buy_next   = getresult(array, array_len, 901);
+	to_buy += to_buy_next;
+	if (c1 < answer->c[1])
+		negativec1 += (answer->c[1]<0);
+/*	to_buy_next   = getresult(array, array_len, 901);
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;*/
+
+	// For VIP
+	if ((negativec1>=5) && (answer->c[2] < 0))
+		to_buy -= 1000/answer->c[0];
 
 	to_buy *= pass;
 

@@ -21,7 +21,7 @@ IHAVE_S=0
 
 LINES="$($WC -l "$PATH" | $AWK '{print $1}')"
 
-INITIAL_DAY=2000
+INITIAL_DAY=100
 
 i=$INITIAL_DAY
 while [[ $i -le $LINES ]]; do

@@ -253,6 +253,9 @@ predanswer_t *predictor(size_t n, double *array)
 
 	answer.sqdiff			 = sqdiff_sum;
 
+	if (c[1] < 0)
+		answer.to_buy			*= 1+(exp(-c[1]*path_avg)-1)/2;
+
 	if ((answer.to_buy * (array[end] - array[end-1])) < 0)
 		answer.to_buy = answer.to_buy / 2.72;
 
@@ -261,7 +264,7 @@ predanswer_t *predictor(size_t n, double *array)
 		answer.to_buy			-= 0.5*(array[end] - array[end-1])*c[1]*fabs(c[1])/array[end]/array[end]/path_avg/path_avg/sqdiff_sum/sqdiff_sum;
 
 	// For AEGR
-	answer.to_buy -= 0.5*c[1]/path_avg/c[0];
+	answer.to_buy -= 0.005*c[1]*path_avg;
 
 /*
 	if (answer.to_buy > 0) {

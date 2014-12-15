@@ -35,7 +35,7 @@ static inline double getresult(double *array, size_t array_len, size_t length) {
 
 	predanswer_t *answer = predictor(length, &array[array_len - length]);
 	critical_on (answer == NULL);
-	fprintf(stderr, "Result %4li:\t%3lf\t(approximated_currency: %lf)\t%lf\n", length, answer->to_buy, answer->approximated_currency, answer->sqdiff);
+	fprintf(stderr, "Result %4li:\t%3lf\t(approximated_currency: %lf)\tsqdiff: %lf\tc[0]: %lf\tc[1]: %lf\tc[2]: %lf\n", length, answer->to_buy, answer->approximated_currency, answer->sqdiff, answer->c[0], answer->c[1], answer->c[2]);
 	return answer->to_buy;
 }
 

@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
 
 	fprintf(stderr, "The last cost is %lf\n", array[array_len-1]);
 
-	double to_buy = 0, to_buy_next, sign, c1, c1_7, sqdiff_7;
+	double to_buy = 0, to_buy_next, sign, c0_7, c1, c1_7, sqdiff_7;
 	char pass = 1;
 	int negativec1 = 0, negativec2 = 0;
 	predanswer_t *answer;
@@ -96,17 +96,20 @@ int main(int argc, char *argv[]) {
 	to_buy_next   = getresult(array, array_len, 7,		&answer)*500;
 	sign = to_buy_next;
 	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf\n", to_buy);
 	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
 		c1          = answer->c[1];
 	}
 	negativec2 += (answer->c[2]<0);
+	c0_7		    = answer->c[0];
 	c1_7		    = answer->c[1];
 	sqdiff_7	    = answer->sqdiff;
 
 	to_buy_next   = getresult(array, array_len, 15,		&answer)*500;
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf\n", to_buy);
 	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
 		c1          = answer->c[1];
@@ -116,6 +119,7 @@ int main(int argc, char *argv[]) {
 	to_buy_next   = getresult(array, array_len, 31,		&answer)*700;
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf\n", to_buy);
 	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
 		c1          = answer->c[1];
@@ -125,6 +129,7 @@ int main(int argc, char *argv[]) {
 	to_buy_next   = getresult(array, array_len, 75,		&answer)*1000;
 //	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf\n", to_buy);
 	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
 		c1          = answer->c[1];
@@ -134,6 +139,7 @@ int main(int argc, char *argv[]) {
 	to_buy_next   = getresult(array, array_len, 365,	&answer)*1000;
 //	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf\n", to_buy);
 	if (c1 < answer->c[1]) {
 		negativec1 += (answer->c[1]<0);
 		c1          = answer->c[1];
@@ -143,11 +149,16 @@ int main(int argc, char *argv[]) {
 	if (sign*to_buy_next < 0) pass = 0;
 	to_buy += to_buy_next;*/
 
-	// For bad compaines (fuse), but it's bad for LJPC, too
-	if (((negativec1 + negativec2) >= 6) && (c1_7 < 0))
-		to_buy -= -c1_7/answer->c[0]/sqdiff_7/sqdiff_7/sqdiff_7/answer->sqdiff/9000000;
+	// For bad compaines (fuse), but it's bad for LJPC and doesn't help against YNDX, too
+	{
+		if (((negativec1 + negativec2) >= 6) && (c1_7 < 0))
+			to_buy -= -c1_7/answer->c[0]/sqdiff_7/sqdiff_7/sqdiff_7/answer->sqdiff/9000000;
 
-	to_buy *= pass;
+		to_buy *= pass;
+
+		if (((array[array_len - 1] - array[array_len - 2]) < 0) && ((array[array_len - 2] - array[array_len - 3] ) < 0) && ((array[array_len - 3] - array[array_len - 4]) < 0) && ((array[array_len - 4] - array[array_len - 5]) < 0))
+			to_buy = -9999;
+	}
 
 	printf("%lf\n", to_buy);
 

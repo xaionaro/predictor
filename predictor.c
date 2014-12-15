@@ -253,11 +253,12 @@ predanswer_t *predictor(size_t n, double *array)
 
 	answer.sqdiff			 = sqdiff_sum;
 
-
 	if ((answer.to_buy * (array[end] - array[end-1])) < 0)
 		answer.to_buy = answer.to_buy / 2.72;
 
-//	answer.to_buy			+= c[1]*10;
+	// For yahoo
+	if ((array[end] - array[end-1]) * c[1] < 0)
+		answer.to_buy			-= (array[end] - array[end-1])*c[1]*fabs(c[1])/array[end]/array[end]/path_avg/path_avg/sqdiff_sum/sqdiff_sum;
 
 /*
 	if (answer.to_buy > 0) {

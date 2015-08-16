@@ -68,7 +68,7 @@ static inline double getresult(double *array, size_t array_len, size_t length, p
 	if (length > array_len)
 		length = array_len;
 
-	predanswer_t *answer = predictor(length, &array[array_len - length]);
+	predanswer_t *answer = predictor(length, array);
 	critical_on (answer == NULL);
 	fprintf(stderr, "Result %4li:\t%3lf\t(approximated_currency: %lf)\tsqdiff: %lf\tc[0]: %lf\tc[1]: %lf\tc[2]: %lf\n", length, answer->to_buy, answer->approximated_currency, answer->sqdiff, answer->c[0], answer->c[1], answer->c[2]);
 	*answer_p = answer;
@@ -80,6 +80,8 @@ static inline int set_currency(double *array, uint32_t ts_prev, uint32_t ts, dou
 
 	if ( ts >= PARSER_MAXELEMENTS )
 		return ENOMEM;
+
+	//debug(7, "currency == %lf\n", currency);
 
 	assert ( ts_prev <= ts );
 
@@ -151,6 +153,8 @@ int main(int argc, char *argv[]) {
 			ts_orig  = atoi(words[0]);
 			currency = atof(words[1]);
 
+			//fprintf(stderr, "currency == %lf\n", currency);
+
 			if (ts_orig == 0) {
 				fprintf(stderr, "Warning: ts == %u. Skipping...\n", ts_orig);
 				continue;
@@ -175,6 +179,8 @@ int main(int argc, char *argv[]) {
 					}
 					//debug(6, "ts_first == %u; ts_prev_prev == %u; ts_prev == %u", ts, ts_prev_prev, ts_prev);
 
+					debug(7, "curcurrency[%i] == %lf (%u)", order, curcurrency[order], ts);
+
 					if (set_currency (array[order], ts_first[order] - ts_prev_prev[order], ts_first[order] - ts_prev[order], curcurrency[order]))
 						continue;
 
@@ -184,18 +190,20 @@ int main(int argc, char *argv[]) {
 					curcurrency[order] = currency;
 
 					ts_prev_prev[order] = ts_prev[order];
-				}
+				} else
 
 				if (ts == ts_prev[order]) {
 					curcount[order]++;
+//					fprintf(stderr, "curcurrency[%i] ==> %lf\n", order, curcurrency[order]);
 					curcurrency[order] = (curcurrency[order]*((double)curcount[order]-1) + currency) / (double)curcount[order];	// average
+//					fprintf(stderr, "curcurrency[%i] <== %lf\n", order, curcurrency[order]);
 				}
 
 				ts_prev[order] = ts;
 			} while (++order < PARSER_MAXORDERS);
 
 			if (ts_first[0] != ~0) {
-				if ((ts_first[0] - ts_orig >> (PARSER_MAXORDERS-1)) > PARSER_MAXELEMENTS) {
+				if (((ts_first[0] - ts_orig) >> (PARSER_MAXORDERS-1)) > PARSER_MAXELEMENTS) {
 					break;
 				}
 			}
@@ -214,10 +222,11 @@ int main(int argc, char *argv[]) {
 		} while (++order < PARSER_MAXORDERS);
 	}
 
-	if (0){
+	{
 		uint32_t i = 0;
 		while (i < array_len[0]) {
-			debug(8, "%i %lf", i, array[0][i++]);
+			debug(8, "%i %lf", i, array[0][i]);
+			i++;
 		}
 	}
 

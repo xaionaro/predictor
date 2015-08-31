@@ -29,10 +29,22 @@
 #include <errno.h>
 #include <math.h>
 #include <assert.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 
 #include "malloc.h"
 #include "error.h"
 #include "predictor.h"
+
+double bet;
+int analyzeperiod;
+double require_result      = 1.0040;
+double require_result_buy  = 1.1000;
+double require_result_sell = 1.1000;
 
 static inline int split(char **r, char *line, char sep, int fields) {
 	char *ptr;
@@ -52,7 +64,8 @@ static inline int split(char **r, char *line, char sep, int fields) {
 			default:
 				if (*ptr == sep) {
 					*ptr = 0;
-					r[fields_count++] = ptr+1;
+					if (fields_count < fields)
+						r[fields_count++] = ptr+1;
 				}
 		}
 
@@ -68,11 +81,21 @@ static inline double getresult(double *array, size_t array_len, size_t length, p
 	if (length > array_len)
 		length = array_len;
 
-	predanswer_t *answer = predictor(length, array);
+	predanswer_t *answer;
+
+	answer = predictor(length, array);
 	critical_on (answer == NULL);
-	fprintf(stderr, "Result %4li:\t%3lf\t(approximated_currency: %lf)\tsqdiff: %lf\tc[0]: %lf\tc[1]: %lf\tc[2]: %lf\n", length, answer->to_buy, answer->approximated_currency, answer->sqdiff, answer->c[0], answer->c[1], answer->c[2]);
+
+	//fprintf(stderr, "Result %4li:\t%3lf\t(approximated_currency: %lf)\tsqdiff: %lf\tc[0]: %lf\tc[1]: %lf\tc[2]: %lf\n", length, answer->to_buy, answer->approximated_currency, answer->sqdiff, answer->c[0], answer->c[1], answer->c[2]);
 	*answer_p = answer;
-	return answer->to_buy;
+
+	double to_buy  = answer->approximated_currency - array[0];
+
+	if (fabs(to_buy) / array[0] < 0.004)
+		return 0;
+
+	//fprintf(stderr, "|%lf|", to_buy);
+	return to_buy;
 }
 
 static inline int set_currency(double *array, uint32_t ts_prev, uint32_t ts, double currency) {
@@ -95,6 +118,108 @@ static inline int set_currency(double *array, uint32_t ts_prev, uint32_t ts, dou
 	return 0;
 }
 
+double get_to_buy(double *array, size_t array_len, size_t mul) {
+	predanswer_t *answer;
+	if (analyzeperiod > 0) {
+		return getresult(array, array_len, analyzeperiod, &answer)*(double)10/sqrt((double)analyzeperiod/(double)60/(double)24)/array[0] * mul*(bet*250)/analyzeperiod;
+	}
+
+	double to_buy = 0, to_buy_next, sign, c0_7, c1, c1_7, sqdiff_7;
+	char pass = 1;
+	int negativec1 = 0, negativec2 = 0;
+
+	c1 = -100000;
+
+	fprintf(stderr, "array[0] == %lf\t", array[0]);
+
+	to_buy_next = getresult(array, array_len, (60)+1,    &answer)*(double)3/sqrt((double)1/(double)60/(double)24)/array[0];
+
+	fprintf(stderr, "k == %lf\t", (answer->approximated_currency - array[0]) / array[0]);
+	if ((answer->approximated_currency - array[0]) / array[0] > (require_result_buy-1))
+		return 0.1;
+
+	sign = to_buy_next;
+	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf (%lf)\t", to_buy, answer->approximated_currency);
+
+	to_buy_next = getresult(array, array_len, (3600*24)+1, &answer)*(double)2/sqrt(1)/array[0];
+
+	fprintf(stderr, "k == %lf\t", (answer->approximated_currency - array[0]) / array[0]);
+	if ((answer->approximated_currency - array[0]) / array[0] > (require_result_buy-1))
+		return 0.1;
+
+	sign = to_buy_next;
+	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf (%lf)\t", to_buy, answer->approximated_currency);
+
+	if (c1 < answer->c[1]) {
+		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
+	c0_7		    = answer->c[0];
+	c1_7		    = answer->c[1];
+	sqdiff_7	    = answer->sqdiff;
+
+	to_buy_next   = getresult(array, array_len, 7*(3600*24)+1,		&answer)/sqrt(7)/array[0];
+	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf (%lf)\t", to_buy, answer->approximated_currency);
+	if (c1 < answer->c[1]) {
+		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
+
+	to_buy_next   = getresult(array, array_len, 31*(3600*24)+1,		&answer)/sqrt(31)/array[0];
+	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf (%lf)\t", to_buy, answer->approximated_currency);
+	if (c1 < answer->c[1]) {
+		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
+
+	to_buy_next   = getresult(array, array_len, 75*(3600*24)+1,		&answer)/sqrt(75)/array[0];
+//	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf (%lf)\t", to_buy, answer->approximated_currency);
+	if (c1 < answer->c[1]) {
+		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
+
+	to_buy_next   = getresult(array, array_len, 365*(3600*24)+1,		&answer)/sqrt(365)/array[0];
+//	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;
+	fprintf(stderr, "to_buy == %lf\t", to_buy);
+	if (c1 < answer->c[1]) {
+		negativec1 += (answer->c[1]<0);
+		c1          = answer->c[1];
+	}
+	negativec2 += (answer->c[2]<0);
+/*	to_buy_next   = getresult(array, array_len, 901);
+	if (sign*to_buy_next < 0) pass = 0;
+	to_buy += to_buy_next;*/
+	fprintf(stderr, "to_buy == %lf\t", to_buy);
+
+	// For bad compaines (fuse), but it's bad for LJPC and doesn't help against YNDX, too
+	if (0){
+		if (((negativec1 + negativec2) >= 6) && (c1_7 < 0))
+			to_buy -= -c1_7/answer->c[0]/sqdiff_7/sqdiff_7/sqdiff_7/answer->sqdiff/9000000;
+
+		to_buy *= pass;
+
+		if (((array[array_len - 1] - array[array_len - 2]) < 0) && ((array[array_len - 2] - array[array_len - 3] ) < 0) && ((array[array_len - 3] - array[array_len - 4]) < 0) && ((array[array_len - 4] - array[array_len - 5]) < 0))
+			to_buy = -9999;
+	}
+	fprintf(stderr, "to_buy == %lf\n", to_buy);
+
+	return mul*to_buy*(bet*250)/450000;
+}
+
 int main(int argc, char *argv[]) {
 	double **array = xmalloc(PARSER_MAXORDERS * sizeof(double *));
 	size_t array_len[PARSER_MAXORDERS] = {0};
@@ -107,6 +232,16 @@ int main(int argc, char *argv[]) {
 		static int output_debuglevel = 9;
 
 		error_init(&output_method, &output_quiet, &output_verbosity, &output_debuglevel);
+	}
+
+	{
+		if (argc <= 3) {
+			critical("Not enough arguments");
+		}
+
+		bet = atof (argv[1]);
+
+		analyzeperiod = atoi (argv[3]);
 	}
 
 	// Initializing the array
@@ -124,11 +259,11 @@ int main(int argc, char *argv[]) {
 		uint32_t ts_orig = ~0;
 		uint32_t ts_first[PARSER_MAXORDERS];
 		uint32_t ts_prev[PARSER_MAXORDERS];
-		char   *line     = NULL;
-		size_t  line_len = 0;
-		ssize_t read_len;
+		//char   *line     = NULL;
+		//size_t  line_len = 0;
+		//ssize_t read_len;
 		int curcount[PARSER_MAXORDERS];
-		uint32_t curcurrency[PARSER_MAXORDERS];
+		double curcurrency[PARSER_MAXORDERS];
 		char **words = (char **)malloc(2 * sizeof(char*));
 		uint32_t ts_prev_prev[PARSER_MAXORDERS];
 
@@ -144,7 +279,41 @@ int main(int argc, char *argv[]) {
 			order++;
 		}
 
-		while ((read_len = getline(&line, &line_len, stdin)) != -1) {
+		char   line[BUFSIZ];
+		struct stat st;
+		assert (stat(argv[2], &st) != -1);
+
+		int fd;
+		char *data;
+
+		fd = open(argv[2], O_RDONLY);
+
+		assert (fd > 0);
+
+		data = mmap((caddr_t)0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
+		assert (data != (caddr_t)(-1));
+
+		size_t pos = st.st_size-1;
+
+		//while ((read_len = getline(&line, &line_len, stdin)) != -1) {
+		while (1) {
+			pos--;
+			size_t oldpos = pos;
+			while (data[pos] != '\n' && pos > 0) pos--;
+			assert (pos > 0);
+			pos++;
+
+			assert (oldpos - pos < BUFSIZ-1);
+
+			//fprintf(stderr, "%lu %lu\n", pos, oldpos);
+
+			memcpy(line, &data[pos], oldpos - pos);
+
+			line [oldpos - pos] = 0;
+
+			pos--;
+
 			int fields_count = split (words, line, ',', 2);
 			if (fields_count < 2) {
 				fprintf(stderr, "Not enough fields: %i. Skipping...\n", fields_count);
@@ -179,7 +348,7 @@ int main(int argc, char *argv[]) {
 					}
 					//debug(6, "ts_first == %u; ts_prev_prev == %u; ts_prev == %u", ts, ts_prev_prev, ts_prev);
 
-					debug(7, "curcurrency[%i] == %lf (%u)", order, curcurrency[order], ts);
+//					debug(7, "curcurrency[%i] == %lf (%u)", order, curcurrency[order], ts);
 
 					if (set_currency (array[order], ts_first[order] - ts_prev_prev[order], ts_first[order] - ts_prev[order], curcurrency[order]))
 						continue;
@@ -196,7 +365,7 @@ int main(int argc, char *argv[]) {
 					curcount[order]++;
 //					fprintf(stderr, "curcurrency[%i] ==> %lf\n", order, curcurrency[order]);
 					curcurrency[order] = (curcurrency[order]*((double)curcount[order]-1) + currency) / (double)curcount[order];	// average
-//					fprintf(stderr, "curcurrency[%i] <== %lf\n", order, curcurrency[order]);
+//					fprintf(stderr, "curcurrency[%i] <== %lf (%i)\n", order, curcurrency[order], curcount[order]);
 				}
 
 				ts_prev[order] = ts;
@@ -210,6 +379,9 @@ int main(int argc, char *argv[]) {
 		}
 		free (words);
 
+		close(fd);
+		//munmap(); // TODO: this
+
 		order = 0;
 		do {
 			uint32_t ts;
@@ -222,7 +394,7 @@ int main(int argc, char *argv[]) {
 		} while (++order < PARSER_MAXORDERS);
 	}
 
-	{
+	if (0) {
 		uint32_t i = 0;
 		while (i < array_len[0]) {
 			debug(8, "%i %lf", i, array[0][i]);
@@ -230,85 +402,166 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	fprintf(stderr, "The last cost is %lf\n", array[0][array_len[0]-1]);
+	//fprintf(stderr, "The last cost is %lf\n", array[0][array_len[0]-1]);
 
-	double to_buy = 0, to_buy_next, sign, c0_7, c1, c1_7, sqdiff_7;
-	char pass = 1;
-	int negativec1 = 0, negativec2 = 0;
-	predanswer_t *answer;
+	size_t check_history_orig = 0;//30;
+	size_t check_length       = 3600*24*1;
+	size_t check_interval     = 10;
+	int check_i = 0;
 
-	c1 = -100000;
+	if (check_history_orig) {
 
-	to_buy_next = getresult(array[0], array_len[0], 7, &answer);
-	sign = to_buy_next;
-	to_buy += to_buy_next;
-	fprintf(stderr, "to_buy == %lf\n", to_buy);
+		double k_sum = 0;
 
+		size_t check_history = check_history_orig;
+
+		double money_t = 0.5;
+		double value_t = 0.5/array[0][check_length * check_history];
+		double buy_cost_avg_t = array[0][check_length * check_history];
+
+		int blocked = 0;
+
+		//#pragma omp parallel for
+		for (size_t check_history=check_history_orig; check_history > 0; check_history--) {
+		//while (1) {
+			size_t check_since = check_length * check_history;
+			if ((check_history-1) <= 0)
+				break;
+
+			double money = 0.5;
+			double value = 0.5/array[0][check_length * check_history];
+			double buy_cost_avg = array[0][check_length * check_history];
+
+			while (check_since > check_length * (check_history-1)) {
+				double to_buy, to_buy_t;
+				double to_buy_cost, to_buy_cost_t;
+
+				check_since -= check_interval;
+
+				//to_buy = answer->to_buy*100;
+				to_buy_t = to_buy = get_to_buy(&array[0][check_since], array_len[0] - check_since, check_interval);
+				printf("%lf to_buy: %lf\t", array[0][check_since], to_buy);
+
+				if (fabs(to_buy) < (0.005 / array[0][check_since] / check_interval))
+					to_buy_t = to_buy = 0;
+				if (array[0][check_since] > buy_cost_avg*require_result_sell && value > 0.0000001) {
+					to_buy = -0.1;
+				}
+				if (array[0][check_since] > buy_cost_avg_t*require_result_sell && value_t > 0.0000001) {
+					to_buy_t = -0.1;
+				}
+
+
+				printf("to_buy: %lf\n", to_buy);
 /*
-	if (c1 < answer->c[1]) {
-		negativec1 += (answer->c[1]<0);
-		c1          = answer->c[1];
-	}
-	negativec2 += (answer->c[2]<0);
-	c0_7		    = answer->c[0];
-	c1_7		    = answer->c[1];
-	sqdiff_7	    = answer->sqdiff;
-
-	to_buy_next   = getresult(array, array_len, 15,		&answer)*500;
-	if (sign*to_buy_next < 0) pass = 0;
-	to_buy += to_buy_next;
-	fprintf(stderr, "to_buy == %lf\n", to_buy);
-	if (c1 < answer->c[1]) {
-		negativec1 += (answer->c[1]<0);
-		c1          = answer->c[1];
-	}
-	negativec2 += (answer->c[2]<0);
-
-	to_buy_next   = getresult(array, array_len, 31,		&answer)*700;
-	if (sign*to_buy_next < 0) pass = 0;
-	to_buy += to_buy_next;
-	fprintf(stderr, "to_buy == %lf\n", to_buy);
-	if (c1 < answer->c[1]) {
-		negativec1 += (answer->c[1]<0);
-		c1          = answer->c[1];
-	}
-	negativec2 += (answer->c[2]<0);
-
-	to_buy_next   = getresult(array, array_len, 75,		&answer)*1000;
-//	if (sign*to_buy_next < 0) pass = 0;
-	to_buy += to_buy_next;
-	fprintf(stderr, "to_buy == %lf\n", to_buy);
-	if (c1 < answer->c[1]) {
-		negativec1 += (answer->c[1]<0);
-		c1          = answer->c[1];
-	}
-	negativec2 += (answer->c[2]<0);
-
-	to_buy_next   = getresult(array, array_len, 365,	&answer)*1000;
-//	if (sign*to_buy_next < 0) pass = 0;
-	to_buy += to_buy_next;
-	fprintf(stderr, "to_buy == %lf\n", to_buy);
-	if (c1 < answer->c[1]) {
-		negativec1 += (answer->c[1]<0);
-		c1          = answer->c[1];
-	}
-	negativec2 += (answer->c[2]<0);
-/ *	to_buy_next   = getresult(array, array_len, 901);
-	if (sign*to_buy_next < 0) pass = 0;
-	to_buy += to_buy_next;* /
-
-	// For bad compaines (fuse), but it's bad for LJPC and doesn't help against YNDX, too
-	{
-		if (((negativec1 + negativec2) >= 6) && (c1_7 < 0))
-			to_buy -= -c1_7/answer->c[0]/sqdiff_7/sqdiff_7/sqdiff_7/answer->sqdiff/9000000;
-
-		to_buy *= pass;
-
-		if (((array[array_len - 1] - array[array_len - 2]) < 0) && ((array[array_len - 2] - array[array_len - 3] ) < 0) && ((array[array_len - 3] - array[array_len - 4]) < 0) && ((array[array_len - 4] - array[array_len - 5]) < 0))
-			to_buy = -9999;
-	}
+				if (fabs(to_buy) / array[0][check_since] < (require_result-1))
+					to_buy = 0;
 */
-	printf("%lf\n", to_buy);
+	//			to_buy /= 3000000;
+
+				if (-to_buy > value)
+					to_buy = -value;
+
+				to_buy_cost = to_buy * array[0][check_since];
+
+
+				if (to_buy_cost > money)
+					to_buy_cost = money;
+
+				to_buy = to_buy_cost / array[0][check_since];
+
+				if (fabs(to_buy) < 0.000000001) {
+					to_buy = 0;
+					to_buy_cost = 0;
+				}
+
+				if (to_buy > 0) {
+					buy_cost_avg = (buy_cost_avg*value + to_buy_cost) / (value + to_buy);
+				} else {
+					if (array[0][check_since] < buy_cost_avg*require_result) {
+						to_buy      = 0;
+						to_buy_cost = 0;
+					}
+				}
+
+				if (to_buy > 0)
+					to_buy *= 0.997;
+				else
+					to_buy *= 1.003;
+
+				//fprintf(stderr, "Check: %u %lf %lf %lf %lf;\t", check_since, array[0][check_since], money, value, buy_cost_avg);
+
+				value += to_buy;
+				money -= to_buy_cost;
+
+				if (fabs(value) < 0.000001) {
+					buy_cost_avg = 0;
+				}
+/*
+				if (fabs(to_buy_t) / array[0][check_since] < (require_result-1))
+					to_buy_t = 0;
+*/
+	//			to_buy_t /= 3000000;
+
+				if (-to_buy_t > value_t)
+					to_buy_t = -value_t;
+
+				to_buy_cost_t = to_buy_t * array[0][check_since];
+
+				if (to_buy_cost_t > money_t)
+					to_buy_cost_t = money_t;
+
+				to_buy_t = to_buy_cost_t / array[0][check_since];
+
+				if (fabs(to_buy_t) < 0.000000001) {
+					to_buy_t = 0;
+					to_buy_cost_t = 0;
+				}
+
+				if (to_buy_t > 0) {
+					buy_cost_avg_t = (buy_cost_avg_t*value_t + to_buy_cost_t) / (value_t + to_buy_t);
+				} else {
+					if (array[0][check_since] < buy_cost_avg_t*require_result) {
+						to_buy_t      = 0;
+						to_buy_cost_t = 0;
+					}
+				}
+
+				if (to_buy_t > 0)
+					to_buy_t *= 0.997;
+				else
+					to_buy_t *= 1.003;
+
+				if (!blocked) {
+					value_t += to_buy_t;
+					money_t -= to_buy_cost_t;
+				}
+
+				if (fabs(value_t) < 0.000001) {
+					buy_cost_avg_t = 0;
+				}
+
+				fprintf(stderr, "CheckF (%i): %lf %lf %lf %e %e\n", check_i, money_t + value_t * array[0][check_since], money_t, value_t, to_buy_t, to_buy_cost_t);
+
+				check_i++;
+
+			}
+
+			double money_total = money + value*array[0][check_since];
+
+			//fprintf(stderr, "CheckR: %lf %lf %lf %lf\n", money_total, money_t + value_t * array[0][check_since], buy_cost_avg_t, value_t);
+
+			k_sum += money_total;
+
+			blocked = 0;//money_total < 1.001;
+		}
+
+		fprintf(stderr, "CheckR-avg: %lf\n", k_sum/(check_history_orig-1));
+
+	}
+
+	double to_buy = get_to_buy(array[0], array_len[0], 10);
+	printf("%0.16lf\n", to_buy);
 
 	// Freeing the array
 	{

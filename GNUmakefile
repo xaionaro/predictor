@@ -31,10 +31,10 @@ binary=predictor
 .PHONY: doc
 
 all: $(objs)
-	$(CC) $(CARCHFLAGS) $(CFLAGS) $(LDFLAGS) $(objs) $(LIBS) -o $(binary)
+	$(CC) $(CARCHFLAGS) $(CFLAGS) $(LDFLAGS) $(objs) $(LIBS) -fopenmp -o $(binary)
 
 %.o: %.c
-	$(CC) $(CARCHFLAGS) $(CFLAGS) $(INC) $< -c -o $@
+	$(CC) $(CARCHFLAGS) $(CFLAGS) $(INC) -fopenmp $< -c -o $@
 
 debug:
 	$(CC) $(CARCHFLAGS) -D_DEBUG_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) *.c $(LIBS) -o $(binary)

@@ -20,6 +20,7 @@
 #include "configuration.h"
 #include "macros.h"
 
+#include <stdio.h>
 #include <stdlib.h>	/* size_t	*/
 #include <string.h>	/* memset()	*/
 #include <math.h>	/* fabs()	*/
@@ -36,7 +37,7 @@ static inline double dapproxfunct(double a, double b, double c, double x)
 
 static inline double approxfunct(double a, double b, double c, double x)
 {
-	debug(5, "a == %lf, b == %lf, c == %.10lf, x == %lf  -->  %lf", a, b, c, x, a*x*x + b*x + c);
+	//debug(5, "a == %lf, b == %lf, c == %.10lf, x == %lf  -->  %lf", a, b, c, x, a*x*x + b*x + c);
 	return a*x*x + b*x + c;
 }
 
@@ -53,10 +54,10 @@ static inline void getsums(double sum[M], size_t start, size_t center, size_t en
 		k = 1;
 		m = 0;
 		while (m < M) {
-			debug(6, "sum[%i] (%lf) += %lf * %lf", m, sum[m], k, array[i]);
+			//debug(6, "sum[%i] (%lf) += %lf * %lf", m, sum[m], k, array[i]);
 			sum[m] += k*array[i];
 			k      *= (double)i-center;
-			debug(6, "sum[%i] == %lf; k == %lf (%li, %li)", m, sum[m], k, i, center);
+			//debug(6, "sum[%i] == %lf; k == %lf (%li, %li)", m, sum[m], k, i, center);
 			m++;
 		}
 
@@ -168,7 +169,7 @@ predanswer_t *predictor(size_t n, double *array)
 					double shift;
 					shift = approxfunct(0, c[1], c[0], (double)i-center);
 					temparray[i] = array[i] - shift;
-					debug(8, "temparray[%li] = %lf - %lf -> %lf", i, array[i], shift, temparray[i]);
+					//debug(7, "temparray[%li] = %lf - %lf -> %lf", i, array[i], shift, temparray[i]);
 					i++;
 				}
 				getsums(tempsum, start, center, end, temparray);
@@ -186,7 +187,7 @@ predanswer_t *predictor(size_t n, double *array)
 				i = start;
 				while (i <= end) {
 					temparray[i] += shift;
-					debug(8, "temparray[%li] == %lf", i, temparray[i]);
+					//debug(8, "temparray[%li] == %lf", i, temparray[i]);
 					i++;
 				}
 
@@ -233,6 +234,7 @@ predanswer_t *predictor(size_t n, double *array)
 			double diff, sqdiff;
 
 			diff   = array[i] - approxfunct(c[2], c[1], c[0], (double)i-center);
+			//debug(7, "temparray[%li] = %lf -> %lf", i, array[i], temparray[i]);
 
 			sqdiff = diff*diff;
 			sqdiff_sum += sqdiff;
@@ -244,12 +246,25 @@ predanswer_t *predictor(size_t n, double *array)
 		sqdiff_sum /= n-1;
 	}
 
-	answer.approximated_currency	 = approxfunct(c[2], c[1], c[0], path_avg);
-	answer.to_buy			 = answer.approximated_currency - array[end];
+	answer.approximated_currency	 = approxfunct(c[2], c[1], c[0], -(double)path_avg);
+	debug(1, "approximated_currency == %lf", answer.approximated_currency);
+
+	//exit(-1);
+
+	answer.to_buy			 = array[start] - answer.approximated_currency;
+/*
+	debug(1, "to_buy == %lf", answer.to_buy);
+
 	if (sqdiff_sum > fabs(answer.to_buy))
 		answer.to_buy = 0;
+
+	debug(1, "to_buy == %lf", answer.to_buy);
 	answer.to_buy			/= array[end];
-	answer.to_buy			*= fabs(answer.to_buy)/sqdiff_sum/array[end]*10;
+
+	debug(1, "to_buy == %lf", answer.to_buy);
+	answer.to_buy			*= fabs(answer.to_buy)/(sqdiff_sum+0.001)/array[start]*10;
+
+	debug(1, "to_buy == %lf", answer.to_buy);
 
 	answer.sqdiff			 = sqdiff_sum;
 
@@ -259,22 +274,31 @@ predanswer_t *predictor(size_t n, double *array)
 	if ((answer.to_buy * (array[end] - array[end-1])) < 0)
 		answer.to_buy = answer.to_buy / 2.72;
 
+	debug(1, "to_buy == %lf", answer.to_buy);
+
 	// For yahoo
 	if ((array[end] - array[end-1]) * c[1] < 0)
 		answer.to_buy			-= 0.5*(array[end] - array[end-1])*c[1]*fabs(c[1])/array[end]/array[end]/path_avg/path_avg/sqdiff_sum/sqdiff_sum;
 
+	debug(1, "to_buy == %lf", answer.to_buy);
+
 	// For AEGR, but bad for LJ and FB
 	//answer.to_buy += 0.001*c[1]*path_avg;
 
-/*
+
 	if (answer.to_buy > 0) {
 		if (answer.to_buy * c[1] > 0)
 			answer.to_buy = 0;
-		if (answer.to_buy * c[2] < 0)
+		if (answer.to_buy * c[2] > 0)
 			answer.to_buy = 0;
 	}
 */
-
+/*
+	if (answer.to_buy * c[2] > 0) {
+		answer.to_buy /= 300000;
+		answer.to_buy /= fabs(c[2]);
+	}
+*/
 	memcpy(answer.c, c, sizeof(c));
 
 	free(temparray);

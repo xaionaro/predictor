@@ -42,6 +42,7 @@
 
 double bet;
 int analyzeperiod;
+int parse_analyzeperiod;
 double require_result      = 1.0040;
 double require_result_buy  = 1.1000;
 double require_result_sell = 1.1000;
@@ -91,8 +92,8 @@ static inline double getresult(double *array, size_t array_len, size_t length, p
 
 	double to_buy  = answer->approximated_currency - array[0];
 
-	if (fabs(to_buy) / array[0] < 0.004)
-		return 0;
+//	if (fabs(to_buy) / array[0] < 0.004)
+//		return 0;
 
 	//fprintf(stderr, "|%lf|", to_buy);
 	return to_buy;
@@ -101,7 +102,7 @@ static inline double getresult(double *array, size_t array_len, size_t length, p
 static inline int set_currency(double *array, uint32_t ts_prev, uint32_t ts, double currency) {
 	uint32_t ts_diff = ts - ts_prev;
 
-	if ( ts >= PARSER_MAXELEMENTS )
+	if ( ts >= parse_analyzeperiod )
 		return ENOMEM;
 
 	//debug(7, "currency == %lf\n", currency);
@@ -121,10 +122,11 @@ static inline int set_currency(double *array, uint32_t ts_prev, uint32_t ts, dou
 double get_to_buy(double *array, size_t array_len, size_t mul) {
 	predanswer_t *answer;
 	if (analyzeperiod > 0) {
-		return getresult(array, array_len, analyzeperiod, &answer)*(double)10/sqrt((double)analyzeperiod/(double)60/(double)24)/array[0] * mul*(bet*250)/analyzeperiod;
+		//return getresult(array, array_len, analyzeperiod, &answer)*(double)10/sqrt((double)analyzeperiod/(double)60/(double)24)/array[0] * mul*(bet*250)/analyzeperiod;
+		return getresult(array, array_len, analyzeperiod, &answer);
 	}
 
-	double to_buy = 0, to_buy_next, sign, c0_7, c1, c1_7, sqdiff_7;
+	double to_buy = 0, to_buy_next, sign, /*c0_7,*/ c1, c1_7, sqdiff_7;
 	char pass = 1;
 	int negativec1 = 0, negativec2 = 0;
 
@@ -157,7 +159,7 @@ double get_to_buy(double *array, size_t array_len, size_t mul) {
 		c1          = answer->c[1];
 	}
 	negativec2 += (answer->c[2]<0);
-	c0_7		    = answer->c[0];
+	//c0_7		    = answer->c[0];
 	c1_7		    = answer->c[1];
 	sqdiff_7	    = answer->sqdiff;
 
@@ -220,39 +222,8 @@ double get_to_buy(double *array, size_t array_len, size_t mul) {
 	return mul*to_buy*(bet*250)/450000;
 }
 
-int main(int argc, char *argv[]) {
-	double **array = xmalloc(PARSER_MAXORDERS * sizeof(double *));
-	size_t array_len[PARSER_MAXORDERS] = {0};
-
-	// Initializing output subsystem
-	{
-		static int output_method     = OM_STDERR;
-		static int output_quiet      = 0;
-		static int output_verbosity  = 9;
-		static int output_debuglevel = 9;
-
-		error_init(&output_method, &output_quiet, &output_verbosity, &output_debuglevel);
-	}
-
-	{
-		if (argc <= 3) {
-			critical("Not enough arguments");
-		}
-
-		bet = atof (argv[1]);
-
-		analyzeperiod = atoi (argv[3]);
-	}
-
-	// Initializing the array
-	{
-		int i = 0;
-		while (i < PARSER_MAXORDERS) {
-			array[i++] = xmalloc(PARSER_MAXELEMENTS * sizeof(double));
-		}
-	}
-
-	// Parsing the input
+void readarray(double **array, size_t *array_len, const char const *fpath)
+{
 	{
 		int order;
 		double currency = 0;
@@ -281,12 +252,12 @@ int main(int argc, char *argv[]) {
 
 		char   line[BUFSIZ];
 		struct stat st;
-		assert (stat(argv[2], &st) != -1);
+		assert (stat(fpath, &st) != -1);
 
 		int fd;
 		char *data;
 
-		fd = open(argv[2], O_RDONLY);
+		fd = open(fpath, O_RDONLY);
 
 		assert (fd > 0);
 
@@ -296,6 +267,7 @@ int main(int argc, char *argv[]) {
 
 		size_t pos = st.st_size-1;
 
+		debug(8, "st.st_size == %u; pos == %u", st.st_size, pos);
 		//while ((read_len = getline(&line, &line_len, stdin)) != -1) {
 		while (1) {
 			pos--;
@@ -372,7 +344,7 @@ int main(int argc, char *argv[]) {
 			} while (++order < PARSER_MAXORDERS);
 
 			if (ts_first[0] != ~0) {
-				if (((ts_first[0] - ts_orig) >> (PARSER_MAXORDERS-1)) > PARSER_MAXELEMENTS) {
+				if (((ts_first[0] - ts_orig) >> (PARSER_MAXORDERS-1)) > parse_analyzeperiod) {
 					break;
 				}
 			}
@@ -403,6 +375,64 @@ int main(int argc, char *argv[]) {
 	}
 
 	//fprintf(stderr, "The last cost is %lf\n", array[0][array_len[0]-1]);
+
+	return;
+}
+
+int main(int argc, char *argv[]) {
+	double **    array = xmalloc(PARSER_MAXORDERS * sizeof(double *));
+	double **oil_array = xmalloc(PARSER_MAXORDERS * sizeof(double *));
+	size_t     array_len[PARSER_MAXORDERS] = {0};
+	size_t oil_array_len[PARSER_MAXORDERS] = {0};
+	double oil_k;
+
+	// Initializing output subsystem
+	{
+		static int output_method     = OM_STDERR;
+		static int output_quiet      = 0;
+		static int output_verbosity  = 9;
+		static int output_debuglevel = 9;
+
+		error_init(&output_method, &output_quiet, &output_verbosity, &output_debuglevel);
+	}
+
+	{
+		if (argc <= 5) {
+			critical("Not enough arguments");
+		}
+
+		bet = atof (argv[1]);
+
+		oil_k               = atoi (argv[3]);
+		analyzeperiod       = atoi (argv[5]);
+		parse_analyzeperiod = (analyzeperiod ? analyzeperiod : PARSER_MAXELEMENTS);
+	}
+
+	// Initializing the array
+	{
+		int i = 0;
+		while (i < PARSER_MAXORDERS) {
+			    array[i] = xmalloc(parse_analyzeperiod * sizeof(double));
+			oil_array[i] = xmalloc(parse_analyzeperiod * sizeof(double));
+			i++;
+		}
+	}
+
+	// Parsing the input
+	readarray(array,     array_len,     argv[2]);
+	readarray(oil_array, oil_array_len, argv[4]);
+
+	debug(4, "array[0][0] == %lf; oil_array[0][0] == %lf (%lf)", array[0][0], oil_array[0][0], oil_k*oil_array[0][0]);
+
+	{
+		int i = 0;
+		while (i < array_len[0]) {
+			array[0][i] += oil_k * oil_array[0][i];
+			i++;
+		}
+	}
+
+	debug(4, "array[0][0] == %lf", array[0][0]);
 
 	size_t check_history_orig = 0;//30;
 	size_t check_length       = 3600*24*1;

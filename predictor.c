@@ -116,6 +116,10 @@ predanswer_t *predictor(size_t n, double *array)
 
 	critical_on (end <= 0);
 	size_t start  = MAX(0, (long)end - PREDICTOR_APPROXIMATE_LEN);
+	if ((start+end) % 2) {
+		start++;
+		critical_on (start == end);
+	}
 
 	critical_on (((start+end) % 2));
 
